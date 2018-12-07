@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"image"
+	"math"
+	"math/rand"
 	"os"
 	"time"
 
@@ -29,38 +32,76 @@ func run() {
 	cfg := pixelgl.WindowConfig{
 		Title:  "Pixel Rocks!",
 		Bounds: pixel.R(0, 0, 1024, 768),
-		VSync:  true,
 	}
 	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	win.SetSmooth(true)
-
-	pic, err := loadPicture("assets/hiking.png")
+	spritesheet, err := loadPicture("assets/trees.png")
 	if err != nil {
 		panic(err)
 	}
 
-	sprite := pixel.NewSprite(pic, pic.Bounds())
+	batch := pixel.NewBatch(&pixel.TrianglesData{}, spritesheet)
 
-	win.Clear(colornames.Aquamarine)
+	var treesFrames []pixel.Rect
+	for x := spritesheet.Bounds().Min.X; x < spritesheet.Bounds().Max.X; x += 32 {
+		for y := spritesheet.Bounds().Min.Y; y < spritesheet.Bounds().Max.Y; y += 32 {
+			treesFrames = append(treesFrames, pixel.R(x, y, x+32, y+32))
+		}
+	}
 
-	angle := 0.0
+	var (
+		camPos       = pixel.ZV
+		camSpeed     = 500.0
+		camZoom      = 1.0
+		camZoomSpeed = 1.2
+	)
+
+	var (
+		frames = 0
+		second = time.Tick(time.Second)
+	)
+
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
 
-		angle += 3 * dt
-		win.Clear(colornames.Firebrick)
-		mat := pixel.IM
-		mat = mat.Rotated(pixel.ZV, angle)
-		mat = mat.Moved(win.Bounds().Center())
-		sprite.Draw(win, mat)
+		cam := pixel.IM.Scaled(camPos, camZoom).Moved(win.Bounds().Center().Sub(camPos))
+		win.SetMatrix(cam)
 
+		if win.Pressed(pixelgl.MouseButtonLeft) {
+			tree := pixel.NewSprite(spritesheet, treesFrames[rand.Intn(len(treesFrames))])
+			mouse := cam.Unproject(win.MousePosition())
+			tree.Draw(batch, pixel.IM.Scaled(pixel.ZV, 4).Moved(mouse))
+		}
+		if win.Pressed(pixelgl.KeyLeft) {
+			camPos.X -= camSpeed * dt
+		}
+		if win.Pressed(pixelgl.KeyRight) {
+			camPos.X += camSpeed * dt
+		}
+		if win.Pressed(pixelgl.KeyDown) {
+			camPos.Y -= camSpeed * dt
+		}
+		if win.Pressed(pixelgl.KeyUp) {
+			camPos.Y += camSpeed * dt
+		}
+		camZoom *= math.Pow(camZoomSpeed, win.MouseScroll().Y)
+
+		win.Clear(colornames.Forestgreen)
+		batch.Draw(win)
 		win.Update()
+
+		frames++
+		select {
+		case <-second:
+			win.SetTitle(fmt.Sprintf("%s | FPS: %d", cfg.Title, frames))
+			frames = 0
+		default:
+		}
 	}
 }
 
