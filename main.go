@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"math"
-	"math/rand"
 	"os"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
-	"golang.org/x/image/colornames"
 )
 
 func loadPicture(path string) (pixel.Picture, error) {
@@ -29,26 +27,42 @@ func loadPicture(path string) (pixel.Picture, error) {
 }
 
 func run() {
+
+	screenWidth := 1024
+	screenHeight := 768
+
 	cfg := pixelgl.WindowConfig{
 		Title:  "Pixel Rocks!",
-		Bounds: pixel.R(0, 0, 1024, 768),
+		Bounds: pixel.R(0, 0, float64(screenWidth), float64(screenHeight)),
 	}
 	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	spritesheet, err := loadPicture("assets/trees.png")
+	spritesheet, err := loadPicture("assets/map_tiles.png")
 	if err != nil {
 		panic(err)
 	}
 
+	var matrices []pixel.Matrix
 	batch := pixel.NewBatch(&pixel.TrianglesData{}, spritesheet)
 
-	var treesFrames []pixel.Rect
-	for x := spritesheet.Bounds().Min.X; x < spritesheet.Bounds().Max.X; x += 32 {
-		for y := spritesheet.Bounds().Min.Y; y < spritesheet.Bounds().Max.Y; y += 32 {
-			treesFrames = append(treesFrames, pixel.R(x, y, x+32, y+32))
+	var tiles []pixel.Rect
+	for x := spritesheet.Bounds().Min.X; x < spritesheet.Bounds().Max.X; x += 34 {
+		for y := spritesheet.Bounds().Min.Y; y < spritesheet.Bounds().Max.Y; y += 34 {
+			tiles = append(tiles, pixel.R(x+1, y+1, x+32, y+32))
+		}
+	}
+
+	tile := pixel.NewSprite(spritesheet, tiles[int(spritesheet.Bounds().Max.X/32)+1])
+
+	xOffset := int(screenHeight / 32)
+	yOffset := screenHeight * 2
+
+	for i := -1 * xOffset; i < xOffset; i++ {
+		for j := -1 * yOffset; j < yOffset; j++ {
+			matrices = append(matrices, pixel.IM.Scaled(pixel.ZV, 4).Moved(pixel.Vec{float64(i * 32), float64(j * 32)}))
 		}
 	}
 
@@ -72,16 +86,11 @@ func run() {
 		cam := pixel.IM.Scaled(camPos, camZoom).Moved(win.Bounds().Center().Sub(camPos))
 		win.SetMatrix(cam)
 
-		if win.Pressed(pixelgl.MouseButtonLeft) {
-			tree := pixel.NewSprite(spritesheet, treesFrames[rand.Intn(len(treesFrames))])
-			mouse := cam.Unproject(win.MousePosition())
-			tree.Draw(batch, pixel.IM.Scaled(pixel.ZV, 4).Moved(mouse))
-		}
 		if win.Pressed(pixelgl.KeyLeft) {
-			camPos.X -= camSpeed * dt
+			//camPos.X -= camSpeed * dt
 		}
 		if win.Pressed(pixelgl.KeyRight) {
-			camPos.X += camSpeed * dt
+			//camPos.X += camSpeed * dt
 		}
 		if win.Pressed(pixelgl.KeyDown) {
 			camPos.Y -= camSpeed * dt
@@ -91,7 +100,12 @@ func run() {
 		}
 		camZoom *= math.Pow(camZoomSpeed, win.MouseScroll().Y)
 
-		win.Clear(colornames.Forestgreen)
+		batch.Clear()
+		for i := 0; i < 32; i++ {
+			for j := 0; j < 64; j++ {
+				tile.Draw(batch, matrices[i*j+j])
+			}
+		}
 		batch.Draw(win)
 		win.Update()
 
